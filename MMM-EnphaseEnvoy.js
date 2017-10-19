@@ -1,15 +1,15 @@
 /* Module */
 
 /* Magic Mirror
- * Module: MMM-MyEnphase
+ * Module: MMM-EnphaseEnvoy
  *
  * By Earle Lowe elowe@elowe.com
  * Apache Licensed.
  */
-Module.register("MMM-MyEnphase",{
+Module.register("MMM-EnphaseEnvoy",{
 
 	defaults: {
-		hostname: "10.1.1.175",
+		hostname: "",
 		initialLoadDelay: 0,
 		updateInterval:  30 * 60 * 1000, // every 30 minutes
 	},
@@ -25,11 +25,10 @@ Module.register("MMM-MyEnphase",{
 	},
 
     getStyles: function() {
-        return ['font-awesome.css', "MMM-MyEnphase.css"];
+        return ['font-awesome.css', "MMM-EnphaseEnvoy.css"];
     },
 
 	getData: function() {
-		Log.info("Getting Data");
 		this.sendSocketNotification("GET_DATA");
 	},
 
@@ -69,7 +68,7 @@ Module.register("MMM-MyEnphase",{
 
 			var imgDiv = document.createElement("div");
             		var img = document.createElement("img");
-            		img.src = "/modules/MMM-MyEnphase/solar_white.png";
+            		img.src = "/modules/MMM-EnphaseEnvoy/solar_white.png";
 
 		        var sTitle = document.createElement("p");
 		        sTitle.innerHTML = "Solar PV";

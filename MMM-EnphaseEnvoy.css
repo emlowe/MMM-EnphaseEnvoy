@@ -10,7 +10,7 @@ p {
 	margin: 0px 0px 0px 15px;
 }
 
-.MMM-MyEnphase .header { color: #FDB813; }
+.MMM-EnphaseEnvoy .header { color: #FDB813; }
  
 hr {
 	border-color: #666;
@@ -20,6 +20,14 @@ td {
 	padding: 0px 5px 0px 0px;
 }
 
-.MMM-MyEnphase .title { color: #FDB813; }
+table tr:nth-child(odd) td{
+}
+	
+table tr:nth-child(even) td{
+background-color: #303030;
+}
+
+
+.MMM-EnphaseEnvoy .title { color: #FDB813; }
 
 

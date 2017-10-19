@@ -1,6 +1,6 @@
 /* Magic Mirror
  * 
- * Node Helper for MMM-AutelisPentair module
+ * Node Helper for MMM-EnphaseEnvoy module
  *
  * Earle Lowe elowe@elowe.com
  * Apache License
@@ -31,8 +31,6 @@ module.exports = NodeHelper.create({
 
 			    var myjson = JSON.stringify(m);
 			    
-			    console.log(myjson);
-
 			    self.sendSocketNotification("DATA", myjson) ;
 			}
         });
@@ -40,10 +38,8 @@ module.exports = NodeHelper.create({
 
     socketNotificationReceived: function(notification, payload) {
         if (notification === "CONFIG") {
-	    console.log("Got Config");
             this.config = payload;
         } else if (notification === "GET_DATA") {
-	    console.log("Got GET_DATA");
             this.getEnphaseData();
         }
     }
