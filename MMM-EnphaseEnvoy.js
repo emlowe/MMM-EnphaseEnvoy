@@ -56,12 +56,14 @@ Module.register("MMM-EnphaseEnvoy",{
 
 		if (this.enphaseData) 
 		{
-			weekUnit = this.enphaseData[4];
-			lifeUnit = this.enphaseData[6];
-			currentString = this.enphaseData[1] + " Watts";
-			todayString = this.enphaseData[2] + " " + weekUnit + "Wh";
-			weekString = this.enphaseData[3] + " " + weekUnit + "Wh";
-			lifeString = this.enphaseData[5] + " " + lifeUnit + "Wh";
+			currentUnit = this.enphaseData[2];
+			todayUnit = this.enphaseData[4];
+			weekUnit = this.enphaseData[6];
+			lifeUnit = this.enphaseData[8];
+			currentString = this.enphaseData[1] + " " + currentUnit + "W";
+			todayString = this.enphaseData[3] + " " + weekUnit + "Wh";
+			weekString = this.enphaseData[5] + " " + weekUnit + "Wh";
+			lifeString = this.enphaseData[7] + " " + lifeUnit + "Wh";
 
 			var table = document.createElement("TABLE");
 			table.className = "table";
