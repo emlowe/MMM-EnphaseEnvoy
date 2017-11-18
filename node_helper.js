@@ -25,7 +25,7 @@ module.exports = NodeHelper.create({
             if (!error && response.statusCode == 200) {
 		     	    var self=this;
 
-			    var re = new RegExp('<td>Currently</td>.*<td>(.*?) (.)W</td></tr>.*<td>Today</td>.*<td>(.*?) (.)Wh</td></tr>.*<td>Past Week</td>.*<td>(.*?) (.)Wh</td></tr>.*<td>Since Installation</td>.*<td>(.*?) (.)Wh</td></tr>');
+			    var re = new RegExp('<td>Currently</td>.*<td>(.*?) (.?)W</td></tr>.*<td>Today</td>.*<td>(.*?) (.?)Wh</td></tr>.*<td>Past Week</td>.*<td>(.*?) (.?)Wh</td></tr>.*<td>Since Installation</td>.*<td>(.*?) (.?)Wh</td></tr>');
 
    			    m = re.exec(body);
 
