@@ -1,10 +1,10 @@
-img {
+.MMM-EnphaseEnvoy img {
 	width: 50px;
 	height: 50px;
 	display: inline;
 }
 
-p {
+.MMM-EnphaseEnvoy p {
 	display: inline;
 	font-size: 50px;
 	margin: 0px 0px 0px 15px;
@@ -12,22 +12,19 @@ p {
 
 .MMM-EnphaseEnvoy .header { color: #FDB813; }
  
-hr {
+.MMM-EnphaseEnvoy hr {
 	border-color: #666;
 }
 
-td {
+.MMM-EnphaseEnvoy td {
 	padding: 0px 5px 0px 0px;
 }
 
-table tr:nth-child(odd) td{
+.MMM-EnphaseEnvoy table tr:nth-child(odd) td{
 }
 	
-table tr:nth-child(even) td{
+.MMM-EnphaseEnvoy table tr:nth-child(even) td{
 background-color: #303030;
 }
 
-
 .MMM-EnphaseEnvoy .title { color: #FDB813; }
-
-
