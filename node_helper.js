@@ -6,35 +6,35 @@
  * Apache License
  */
 const NodeHelper = require('node_helper');
-const request = require('request');
+const Log = require("logger");
+const http = require("http");
 
 module.exports = NodeHelper.create({
         
     start: function() {
-        console.log("Starting module: " + this.name);
+        Log.log(`Starting node helper for: ${this.name}`);
     },
 
     getEnphaseData: function() {
         var url = "http://" + this.config.hostname + "/production";
-        request.get({
-            url: url,
-            headers: {
-                'User-Agent': 'MagicMirror/1.0'
-            }
-        }, (error, response, body) => {
-            if (!error && response.statusCode == 200) {
-		     	    var self=this;
 
-			    var re = new RegExp('<td>Currently</td>.*<td>(.*?) (.?)W</td></tr>.*<td>Today</td>.*<td>(.*?) (.?)Wh</td></tr>.*<td>Past Week</td>.*<td>(.*?) (.?)Wh</td></tr>.*<td>Since Installation</td>.*<td>(.*?) (.?)Wh</td></tr>');
+        http.get(url, (res) => {
+          let data = ''; 
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
+          res.on('end', () => {
+            var self=this;
+            var re = new RegExp('<td>Currently</td>.*<td>(.*?) (.?)W</td></tr>.*<td>Today</td>.*<td>(.*?) (.?)Wh</td></tr>.*<td>Past Week</td>.*<td>(.*?) (.?)Wh</td></tr>.*<td>Since Installation</td>.*<td>(.*?) (.?)Wh</td></tr>');
 
-   			    m = re.exec(body);
-
-			    var myjson = JSON.stringify(m);
-			    
-			    self.sendSocketNotification("DATA", myjson) ;
-			}
+            m = re.exec(data);
+            var myjson = JSON.stringify(m);
+            self.sendSocketNotification("DATA", myjson) ;
+          });
+        }).on('error', (err) => {
+          Log.error(`Got error: ${err.message}`);
         });
-    },
+        },
 
     socketNotificationReceived: function(notification, payload) {
         if (notification === "CONFIG") {
@@ -45,3 +45,4 @@ module.exports = NodeHelper.create({
     }
 
 });
+
