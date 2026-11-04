@@ -11,131 +11,116 @@ Module.register("MMM-EnphaseEnvoy",{
 	defaults: {
 		hostname: "",
 		initialLoadDelay: 0,
-		updateInterval:  30 * 60 * 1000, // every 30 minutes
+		updateInterval: 5 * 60 * 1000, // every 5 minutes
+		staleAfter: 3, // missed updates before the panel says data is old
 	},
 
 	// Define start sequence.
 	start: function() {
 		this.loaded = false;
 		this.enphaseData = null;
+		this.lastUpdate = 0;
+		this.weatherType = "day-sunny"; // until the weather module reports in
 
 		this.sendSocketNotification("CONFIG", this.config);
 
 		this.scheduleUpdate(this.config.initialLoadDelay);
 	},
 
-    getStyles: function() {
-        return ['font-awesome.css', "MMM-EnphaseEnvoy.css"];
-    },
+	getStyles: function() {
+		return ["weather-icons.css", "MMM-EnphaseEnvoy.css"];
+	},
 
 	getData: function() {
-		this.sendSocketNotification("GET_DATA");
+		this.sendSocketNotification("GET_DATA", this.config);
 	},
 
 	socketNotificationReceived: function(notification, payload) {
 		if (notification === "DATA") {
-			this.enphaseData = JSON.parse(payload);
-
-			this.loaded = true;
+			try {
+				var parsed = JSON.parse(payload);
+				if (parsed) {
+					this.enphaseData = parsed;
+					this.lastUpdate = Date.now();
+					this.loaded = true;
+				}
+			} catch (e) {
+				Log.error("MMM-EnphaseEnvoy: could not parse data: " + e.message);
+			}
+			this.updateDom();
+		} else if (notification === "DATA_ERROR") {
 			this.updateDom();
 		}
-		this.scheduleUpdate()
+		this.scheduleUpdate();
+	},
+
+	// Create an element with a class and optional text.
+	el: function(tag, className, text) {
+		var node = document.createElement(tag);
+		if (className) {
+			node.className = className;
+		}
+		if (text !== undefined) {
+			node.textContent = text;
+		}
+		return node;
+	},
+
+	// One of the three totals under the power reading.
+	total: function(label, value, unit) {
+		var node = this.el("div");
+		node.appendChild(this.el("div", "solar-label", label));
+		var valueNode = this.el("div", "solar-value", value + " ");
+		valueNode.appendChild(this.el("span", "solar-label", unit));
+		node.appendChild(valueNode);
+		return node;
+	},
+
+	isStale: function() {
+		return Date.now() - this.lastUpdate > this.config.updateInterval * this.config.staleAfter;
 	},
 
 	// Override dom generator.
 	getDom: function() {
-
 		var wrapper = document.createElement("div");
 
-		if (!this.loaded) {
-			wrapper.innerHTML = "Getting Data";
+		if (!this.loaded || !this.enphaseData) {
+			wrapper.textContent = "Getting Data";
 			wrapper.className = "dimmed light small";
-
 			return wrapper;
 		}
 
-		if (this.enphaseData) 
-		{
-			currentUnit = this.enphaseData[2];
-			todayUnit = this.enphaseData[4];
-			weekUnit = this.enphaseData[6];
-			lifeUnit = this.enphaseData[8];
-			currentString = this.enphaseData[1] + " " + currentUnit + "W";
-			todayString = this.enphaseData[3] + " " + weekUnit + "Wh";
-			weekString = this.enphaseData[5] + " " + weekUnit + "Wh";
-			lifeString = this.enphaseData[7] + " " + lifeUnit + "Wh";
+		var data = this.enphaseData;
+		var stale = this.isStale();
+		wrapper.className = "solar-panel" + (stale ? " solar-stale" : "");
 
-			var table = document.createElement("TABLE");
-			table.className = "table";
+		var head = this.el("div", "solar-head");
+		head.appendChild(this.el("span", null, stale ? "Solar: no recent data" : "Solar"));
+		head.appendChild(this.el("i", "solar-icon wi wi-" + this.weatherType));
+		wrapper.appendChild(head);
 
-			var imgDiv = document.createElement("div");
-            		var img = document.createElement("img");
-            		img.src = "/modules/MMM-EnphaseEnvoy/solar_white.png";
+		var power = this.el("div", "solar-power", data[1]);
+		power.appendChild(this.el("span", "solar-power-unit", " " + data[2] + "W"));
+		wrapper.appendChild(power);
 
-		        var sTitle = document.createElement("p");
-		        sTitle.innerHTML = "Solar PV";
-		        sTitle.className += " header thin normal";
-		        imgDiv.appendChild(img);
-		    	imgDiv.appendChild(sTitle);
-
-		        var divider = document.createElement("hr");
-		        divider.className += " dimmed";
-		        wrapper.appendChild(imgDiv);
-		        wrapper.appendChild(divider);
-			
-			var currenttr = document.createElement("tr");
-			table.appendChild(currenttr);
-			var currentl = document.createElement("td");
-			var currentr = document.createElement("td");
-			currentl.className += " title medium light bright";
-			currentr.className += " data medium light normal";
-			currentl.innerHTML = "Current Power:";
-			currentr.innerHTML = currentString;
-			currenttr.appendChild(currentl);
-			currenttr.appendChild(currentr);
-
-			var todaytr = document.createElement("tr");
-			table.appendChild(todaytr);
-			var todayl = document.createElement("td");
-			var todayr = document.createElement("td");
-			todayl.className += " title medium light bright";
-			todayr.className += " data medium light normal";
-			todayl.innerHTML = "Today:";
-			todayr.innerHTML = todayString;
-			todaytr.appendChild(todayl);
-			todaytr.appendChild(todayr);
-
-			var weektr = document.createElement("tr");
-			table.appendChild(weektr);
-			var weekl = document.createElement("td");
-			var weekr = document.createElement("td");
-			weekl.className += " title medium light bright";
-			weekr.className += " data medium light normal";
-			weekl.innerHTML = "This Week:";
-			weekr.innerHTML = weekString;
-			weektr.appendChild(weekl);
-			weektr.appendChild(weekr);
-
-			var lifetr = document.createElement("tr");
-			table.appendChild(lifetr);
-			var lifel = document.createElement("td");
-			var lifer = document.createElement("td");
-			lifel.className += " title medium light bright";
-			lifer.className += " data medium light normal";
-			lifel.innerHTML = "Lifetime:";
-			lifer.innerHTML = lifeString;
-			lifetr.appendChild(lifel);
-			lifetr.appendChild(lifer);
-
-			wrapper.appendChild(table);
-		}
+		var totals = this.el("div", "solar-totals");
+		totals.appendChild(this.total("Today", data[3], data[4] + "Wh"));
+		totals.appendChild(this.total("Week", data[5], data[6] + "Wh"));
+		totals.appendChild(this.total("Lifetime", data[7], data[8] + "Wh"));
+		wrapper.appendChild(totals);
 
 		return wrapper;
 	},
 
 	notificationReceived: function(notification, payload, sender) {
-		if (notification === "DOM_OBJECTS_CREATED") {	
+		if (notification === "DOM_OBJECTS_CREATED") {
 			this.updateDom();
+		} else if (notification === "WEATHER_UPDATED" && payload && payload.currentWeather && payload.currentWeather.weatherType) {
+			// Forecast-only weather modules send no current weather, so they're ignored.
+			if (payload.currentWeather.weatherType !== this.weatherType) {
+				this.weatherType = payload.currentWeather.weatherType;
+				this.updateDom();
+			}
 		}
 	},
 
@@ -146,7 +131,8 @@ Module.register("MMM-EnphaseEnvoy",{
 		}
 
 		var self = this;
-		setTimeout(function() { self.getData(); }, nextLoad);
+		clearTimeout(this.updateTimer);
+		this.updateTimer = setTimeout(function() { self.getData(); }, nextLoad);
 	},
 
 });
