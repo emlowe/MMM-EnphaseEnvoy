@@ -8,11 +8,70 @@
 const NodeHelper = require('node_helper');
 const Log = require("logger");
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
+
+const HISTORY_FILE = path.join(__dirname, "history.json");
+const MIN_SAMPLE_GAP = 60 * 1000; // several open pages shouldn't add extra samples
+const UNIT_FACTORS = { "": 1, k: 1e3, M: 1e6 };
 
 module.exports = NodeHelper.create({
 
     start: function() {
         Log.log(`Starting node helper for: ${this.name}`);
+        this.history = this.loadHistory();
+    },
+
+    // Local calendar day, so history resets at the mirror's midnight.
+    dayKey: function(time) {
+        return new Date(time).toDateString();
+    },
+
+    loadHistory: function() {
+        var today = this.dayKey(Date.now());
+        try {
+            var saved = JSON.parse(fs.readFileSync(HISTORY_FILE, "utf8"));
+            if (saved.day === today && Array.isArray(saved.samples)) {
+                return saved;
+            }
+        } catch (e) {
+            if (e.code !== "ENOENT") {
+                Log.error(`MMM-EnphaseEnvoy: ignoring saved history: ${e.message}`);
+            }
+        }
+        return { day: today, samples: [] };
+    },
+
+    // Write then rename, so a power cut can't leave half a file behind.
+    saveHistory: function() {
+        var tempFile = `${HISTORY_FILE}.tmp`;
+        try {
+            fs.writeFileSync(tempFile, JSON.stringify(this.history));
+            fs.renameSync(tempFile, HISTORY_FILE);
+        } catch (e) {
+            Log.error(`MMM-EnphaseEnvoy: could not save history: ${e.message}`);
+        }
+    },
+
+    // Add one [time, watts] reading to today's history.
+    recordSample: function(value, unit) {
+        var watts = parseFloat(value.replace(/,/g, "")) * UNIT_FACTORS[unit];
+        if (!Number.isFinite(watts)) {
+            Log.error(`MMM-EnphaseEnvoy: could not read power value "${value} ${unit}W"`);
+            return;
+        }
+
+        var now = Date.now();
+        var today = this.dayKey(now);
+        if (this.history.day !== today) {
+            this.history = { day: today, samples: [] };
+        }
+
+        var last = this.history.samples[this.history.samples.length - 1];
+        if (!last || now - last[0] >= MIN_SAMPLE_GAP) {
+            this.history.samples.push([now, watts]);
+            this.saveHistory();
+        }
     },
 
     getEnphaseData: function() {
@@ -36,6 +95,8 @@ module.exports = NodeHelper.create({
                     fail("could not find production values in the Envoy page");
                     return;
                 }
+                this.recordSample(m[1], m[2]);
+                this.sendSocketNotification("HISTORY", this.history.samples);
                 this.sendSocketNotification("DATA", JSON.stringify(m));
             });
         });
