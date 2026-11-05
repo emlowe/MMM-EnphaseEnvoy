@@ -129,6 +129,39 @@ Module.register("MMM-EnphaseEnvoy",{
 		return path;
 	},
 
+	// The Envoy publishes a new value about every 15 minutes, so repeated readings
+	// of it would draw stairs. Keep the first reading of each value, the end of any
+	// long flat stretch, and the latest reading.
+	settledSamples: function(samples) {
+		var LONG_FLAT = 30 * 60 * 1000;
+		return samples.filter(function(sample, index) {
+			var previous = samples[index - 1];
+			var next = samples[index + 1];
+			if (!previous || !next || sample[1] !== previous[1]) {
+				return true;
+			}
+			if (next[1] === sample[1]) {
+				return false;
+			}
+			var first = index;
+			while (first > 0 && samples[first - 1][1] === sample[1]) {
+				first--;
+			}
+			return sample[0] - samples[first][0] >= LONG_FLAT;
+		});
+	},
+
+	// A light weighted average to take out small wiggles. The ends stay put, so
+	// the line still starts at its first reading and reaches the current one.
+	softenPoints: function(points) {
+		return points.map(function(point, index) {
+			if (index === 0 || index === points.length - 1) {
+				return point;
+			}
+			return [point[0], (points[index - 1][1] + 2 * point[1] + points[index + 1][1]) / 4];
+		});
+	},
+
 	svg: function(tag, className, attributes) {
 		var node = document.createElementNS("http://www.w3.org/2000/svg", tag);
 		node.setAttribute("class", className);
@@ -199,13 +232,14 @@ Module.register("MMM-EnphaseEnvoy",{
 			if (index === 0 || sample[0] - samples[index - 1][0] > maxGap) {
 				runs.push([]);
 			}
-			runs[runs.length - 1].push(toPoint(sample));
+			runs[runs.length - 1].push(sample);
 		});
 
 		var self = this;
 		runs.filter(function(run) { return run.length > 1; }).forEach(function(run) {
-			var line = self.smoothPath(run);
-			var area = line + " L" + run[run.length - 1][0].toFixed(1) + " " + BASELINE + " L" + run[0][0].toFixed(1) + " " + BASELINE + " Z";
+			var points = self.softenPoints(self.settledSamples(run).map(toPoint));
+			var line = self.smoothPath(points);
+			var area = line + " L" + points[points.length - 1][0].toFixed(1) + " " + BASELINE + " L" + points[0][0].toFixed(1) + " " + BASELINE + " Z";
 			chart.appendChild(self.svg("path", "solar-area", { d: area }));
 			chart.appendChild(self.svg("path", "solar-line", { d: line }));
 		});
