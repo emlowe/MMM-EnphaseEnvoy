@@ -93,6 +93,14 @@
   border-top: 1px solid #3a4047;
 }
 
+.solar-totals > :nth-child(2) {
+  text-align: center;
+}
+
+.solar-totals > :nth-child(3) {
+  text-align: right;
+}
+
 .solar-label {
   color: #a3a9b0;
   font-size: 20px;
