@@ -2,7 +2,7 @@
   color: #fff;
   font-weight: 300;
   text-align: left;
-  width: 400px;
+  width: 420px;
 }
 
 .solar-head {
@@ -30,6 +30,58 @@
 
 .solar-stale .solar-power {
   color: #a3a9b0;
+}
+
+.solar-middle {
+  display: grid;
+  grid-template-columns: auto minmax(170px, 1fr);
+  gap: 16px;
+  align-items: end;
+}
+
+.solar-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.solar-baseline {
+  stroke: #3a4047;
+  stroke-width: 1;
+}
+
+.solar-area {
+  fill: #fdb813;
+  fill-opacity: 0.22;
+}
+
+.solar-line {
+  fill: none;
+  stroke: #fdb813;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.solar-now {
+  fill: #fdb813;
+}
+
+.solar-stale .solar-area {
+  fill: #a3a9b0;
+}
+
+.solar-stale .solar-line {
+  stroke: #a3a9b0;
+}
+
+.solar-graph-labels {
+  display: flex;
+  justify-content: space-between;
+  color: #a3a9b0;
+  font-size: 16px;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .solar-totals {

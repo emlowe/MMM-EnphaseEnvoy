@@ -21,6 +21,9 @@ Module.register("MMM-EnphaseEnvoy",{
 		this.enphaseData = null;
 		this.lastUpdate = 0;
 		this.weatherType = "day-sunny"; // until the weather module reports in
+		this.samples = []; // today's [time, watts] readings from the node helper
+		this.sunrise = null;
+		this.sunset = null;
 
 		this.sendSocketNotification("CONFIG", this.config);
 
@@ -36,6 +39,10 @@ Module.register("MMM-EnphaseEnvoy",{
 	},
 
 	socketNotificationReceived: function(notification, payload) {
+		if (notification === "HISTORY") {
+			this.samples = payload || [];
+			return; // DATA follows straight away and redraws the panel
+		}
 		if (notification === "DATA") {
 			try {
 				var parsed = JSON.parse(payload);
@@ -80,6 +87,144 @@ Module.register("MMM-EnphaseEnvoy",{
 		return Date.now() - this.lastUpdate > this.config.updateInterval * this.config.staleAfter;
 	},
 
+	// A smooth path through the points that never overshoots them, so the curve
+	// can't dip below zero or rise above the day's peak (monotone cubic).
+	smoothPath: function(points) {
+		var count = points.length;
+		var path = "M" + points[0][0].toFixed(1) + " " + points[0][1].toFixed(1);
+		if (count < 2) {
+			return path;
+		}
+
+		var widths = [];
+		var slopes = [];
+		for (var i = 0; i < count - 1; i++) {
+			widths[i] = points[i + 1][0] - points[i][0];
+			slopes[i] = (points[i + 1][1] - points[i][1]) / widths[i];
+		}
+
+		var tangents = [slopes[0]];
+		for (var j = 1; j < count - 1; j++) {
+			if (slopes[j - 1] * slopes[j] <= 0) {
+				tangents[j] = 0; // a peak or a dip stays flat at the reading
+			} else {
+				var mean = (slopes[j - 1] * widths[j] + slopes[j] * widths[j - 1]) / (widths[j - 1] + widths[j]);
+				var limit = 2 * Math.min(Math.abs(slopes[j - 1]), Math.abs(slopes[j]), Math.abs(mean) / 2);
+				tangents[j] = Math.sign(slopes[j]) * limit;
+			}
+		}
+		tangents[count - 1] = slopes[count - 2];
+
+		for (var k = 0; k < count - 1; k++) {
+			var third = widths[k] / 3;
+			path += " C" + [
+				points[k][0] + third,
+				points[k][1] + third * tangents[k],
+				points[k + 1][0] - third,
+				points[k + 1][1] - third * tangents[k + 1],
+				points[k + 1][0],
+				points[k + 1][1]
+			].map(function(n) { return n.toFixed(1); }).join(" ");
+		}
+		return path;
+	},
+
+	svg: function(tag, className, attributes) {
+		var node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+		node.setAttribute("class", className);
+		Object.keys(attributes).forEach(function(name) {
+			node.setAttribute(name, attributes[name]);
+		});
+		return node;
+	},
+
+	formatTime: function(time) {
+		var date = new Date(time);
+		var minutes = String(date.getMinutes()).padStart(2, "0");
+		if (config.timeFormat === 24) {
+			return date.getHours() + ":" + minutes;
+		}
+		return (date.getHours() % 12 || 12) + ":" + minutes;
+	},
+
+	formatPower: function(watts) {
+		return watts >= 1000 ? (watts / 1000).toFixed(1) + " kW" : Math.round(watts) + " W";
+	},
+
+	// The part of the day to plot: sunrise to sunset, widened if the panels
+	// produced outside it. Without today's sun times, falls back to the readings.
+	graphWindow: function(samples) {
+		var isToday = function(time) {
+			return time && new Date(time).toDateString() === new Date().toDateString();
+		};
+		var producing = samples.filter(function(sample) { return sample[1] > 0; });
+		var start = isToday(this.sunrise) ? this.sunrise : new Date().setHours(6, 0, 0, 0);
+		var end = isToday(this.sunset) ? this.sunset : new Date().setHours(18, 0, 0, 0);
+		if (producing.length) {
+			start = Math.min(start, producing[0][0]);
+			end = Math.max(end, producing[producing.length - 1][0]);
+		}
+		return { start: start, end: end };
+	},
+
+	// Power so far today, drawn beside the current reading.
+	buildGraph: function(stale) {
+		var WIDTH = 200, HEIGHT = 70, TOP = 6, BASELINE = 66;
+
+		var today = new Date().toDateString();
+		var todays = this.samples.filter(function(sample) {
+			return new Date(sample[0]).toDateString() === today;
+		});
+		var range = this.graphWindow(todays);
+		var samples = todays.filter(function(sample) {
+			return sample[0] >= range.start && sample[0] <= range.end;
+		});
+		var peak = samples.reduce(function(highest, sample) { return Math.max(highest, sample[1]); }, 0);
+
+		var toPoint = function(sample) {
+			return [
+				(sample[0] - range.start) / (range.end - range.start) * WIDTH,
+				BASELINE - (peak > 0 ? sample[1] / peak : 0) * (BASELINE - TOP)
+			];
+		};
+
+		var graph = this.el("div", "solar-graph");
+		var chart = this.svg("svg", "solar-chart", { viewBox: "0 0 " + WIDTH + " " + HEIGHT });
+		chart.appendChild(this.svg("line", "solar-baseline", { x1: 0, y1: BASELINE, x2: WIDTH, y2: BASELINE }));
+
+		// Time the Pi was off is left as a gap instead of a line across it.
+		var maxGap = this.config.updateInterval * this.config.staleAfter;
+		var runs = [];
+		samples.forEach(function(sample, index) {
+			if (index === 0 || sample[0] - samples[index - 1][0] > maxGap) {
+				runs.push([]);
+			}
+			runs[runs.length - 1].push(toPoint(sample));
+		});
+
+		var self = this;
+		runs.filter(function(run) { return run.length > 1; }).forEach(function(run) {
+			var line = self.smoothPath(run);
+			var area = line + " L" + run[run.length - 1][0].toFixed(1) + " " + BASELINE + " L" + run[0][0].toFixed(1) + " " + BASELINE + " Z";
+			chart.appendChild(self.svg("path", "solar-area", { d: area }));
+			chart.appendChild(self.svg("path", "solar-line", { d: line }));
+		});
+
+		if (samples.length && !stale && Date.now() <= range.end) {
+			var latest = toPoint(samples[samples.length - 1]);
+			chart.appendChild(this.svg("circle", "solar-now", { cx: latest[0], cy: latest[1], r: 4 }));
+		}
+		graph.appendChild(chart);
+
+		var labels = this.el("div", "solar-graph-labels");
+		labels.appendChild(this.el("span", null, this.formatTime(range.start)));
+		labels.appendChild(this.el("span", null, peak > 0 ? "Peak " + this.formatPower(peak) : ""));
+		labels.appendChild(this.el("span", null, this.formatTime(range.end)));
+		graph.appendChild(labels);
+
+		return graph;
+	},
+
 	// Override dom generator.
 	getDom: function() {
 		var wrapper = document.createElement("div");
@@ -101,7 +246,11 @@ Module.register("MMM-EnphaseEnvoy",{
 
 		var power = this.el("div", "solar-power", data[1]);
 		power.appendChild(this.el("span", "solar-power-unit", " " + data[2] + "W"));
-		wrapper.appendChild(power);
+
+		var middle = this.el("div", "solar-middle");
+		middle.appendChild(power);
+		middle.appendChild(this.buildGraph(stale));
+		wrapper.appendChild(middle);
 
 		var totals = this.el("div", "solar-totals");
 		totals.appendChild(this.total("Today", data[3], data[4] + "Wh"));
@@ -117,6 +266,8 @@ Module.register("MMM-EnphaseEnvoy",{
 			this.updateDom();
 		} else if (notification === "WEATHER_UPDATED" && payload && payload.currentWeather && payload.currentWeather.weatherType) {
 			// Forecast-only weather modules send no current weather, so they're ignored.
+			this.sunrise = payload.currentWeather.sunrise || this.sunrise;
+			this.sunset = payload.currentWeather.sunset || this.sunset;
 			if (payload.currentWeather.weatherType !== this.weatherType) {
 				this.weatherType = payload.currentWeather.weatherType;
 				this.updateDom();
